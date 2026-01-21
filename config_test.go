@@ -131,9 +131,18 @@ func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 	
 	// Change to a temp directory where no config file exists
 	tmpDir := t.TempDir()
-	originalCwd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(originalCwd)
+	originalCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalCwd); err != nil {
+			t.Errorf("Failed to restore directory: %v", err)
+		}
+	}()
 	
 	config, err := LoadConfig()
 	if err != nil {
@@ -188,9 +197,18 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	
 	// Change to a temp directory where no config file exists
 	tmpDir := t.TempDir()
-	originalCwd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(originalCwd)
+	originalCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalCwd); err != nil {
+			t.Errorf("Failed to restore directory: %v", err)
+		}
+	}()
 	
 	config, err := LoadConfig()
 	if err != nil {
@@ -243,13 +261,22 @@ func TestLoadConfig_MissingRequired(t *testing.T) {
 	
 	// Change to a temp directory where no config file exists
 	tmpDir := t.TempDir()
-	originalCwd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(originalCwd)
+	originalCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalCwd); err != nil {
+			t.Errorf("Failed to restore directory: %v", err)
+		}
+	}()
 	
 	// Test missing OS_AUTH_URL
 	os.Unsetenv("OS_AUTH_URL")
-	_, err := LoadConfig()
+	_, err = LoadConfig()
 	if err == nil {
 		t.Error("LoadConfig should fail when OS_AUTH_URL is missing")
 	}

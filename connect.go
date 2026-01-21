@@ -70,7 +70,10 @@ func showInstanceMenu(serverList []servers.Server) (*servers.Server, error) {
 
 	for {
 		// Clear screen
-		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+		if err := termbox.Clear(termbox.ColorDefault, termbox.ColorDefault); err != nil {
+			// If clearing fails, continue anyway as it's not critical
+			continue
+		}
 
 		// Print prompt
 		prompt := "? Select an instance (Use arrow keys)"
@@ -209,10 +212,7 @@ var connectCmd = &cobra.Command{
 		}
 
 		// Extract instance name from full name
-		instanceName := selectedServer.Name
-		if strings.HasPrefix(instanceName, InstanceNamePrefix) {
-			instanceName = strings.TrimPrefix(instanceName, InstanceNamePrefix)
-		}
+		instanceName := strings.TrimPrefix(selectedServer.Name, InstanceNamePrefix)
 
 		// Get IP address
 		ipAddress, err := extractIPAddress(selectedServer)

@@ -131,7 +131,10 @@ var createCmd = &cobra.Command{
 		server, err := client.CreateInstance(ctx, fullInstanceName, keyPair.PublicKey)
 		if err != nil {
 			// Clean up SSH keys on failure
-			DeleteSSHKey(instanceName)
+			if deleteErr := DeleteSSHKey(instanceName); deleteErr != nil {
+				// Log but don't fail on cleanup error
+				fmt.Printf("Warning: Failed to clean up SSH key: %v\n", deleteErr)
+			}
 			return fmt.Errorf("failed to create instance: %w", err)
 		}
 
