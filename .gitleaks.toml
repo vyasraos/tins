@@ -1,0 +1,33 @@
+# Gitleaks configuration for secret scanning
+title = "Gitleaks Secret Scanner Configuration"
+
+[extend]
+# Use default rules
+useDefault = true
+
+[allowlist]
+description = "Allowlist for known false positives"
+paths = [
+  '''\.example\.yaml$''',
+  '''\.example\.yml$''',
+  '''\.sample\.yaml$''',
+  '''\.sample\.yml$''',
+  '''\.test\.go$''',
+  '''_test\.go$''',
+  '''\.md$''',
+  '''\.txt$''',
+  '''\.gitignore$''',
+  '''\.gitleaks\.toml$''',
+]
+
+commits = [
+  # Add commit SHAs here if needed to allowlist specific commits
+]
+
+regexes = [
+  '''example.*password.*example''',
+  '''test.*key.*test''',
+]
+
+[rules]
+# Custom rules can be added here if needed
