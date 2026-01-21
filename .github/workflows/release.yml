@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: go.sum
+
+      - name: Get version from tag
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Get commit hash
+        id: commit
+        run: echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          
+          VERSION="${{ steps.tag.outputs.VERSION }}"
+          COMMIT="${{ steps.commit.outputs.COMMIT }}"
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}"
+          
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -v -trimpath -ldflags="${LDFLAGS}" -o dist/tins-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -v -trimpath -ldflags="${LDFLAGS}" -o dist/tins-linux-arm64 .
+          
+          # macOS
+          GOOS=darwin GOARCH=amd64 go build -v -trimpath -ldflags="${LDFLAGS}" -o dist/tins-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -v -trimpath -ldflags="${LDFLAGS}" -o dist/tins-darwin-arm64 .
+          
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -v -trimpath -ldflags="${LDFLAGS}" -o dist/tins-windows-amd64.exe .
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          body: |
+            ## Release ${{ steps.tag.outputs.VERSION }}
+            
+            ### Binaries
+            
+            - `tins-linux-amd64` - Linux (amd64)
+            - `tins-linux-arm64` - Linux (arm64)
+            - `tins-darwin-amd64` - macOS (amd64)
+            - `tins-darwin-arm64` - macOS (arm64)
+            - `tins-windows-amd64.exe` - Windows (amd64)
+            
+            ### Installation
+            
+            Download the appropriate binary for your platform and add it to your PATH.
+            
+            ### Checksums
+            
+            See `checksums.txt` for SHA256 checksums of all binaries.
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

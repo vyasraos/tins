@@ -1,0 +1,22 @@
+# OpenStack Configuration File
+# Copy this file to either:
+#   - .config/tint.yaml (in your current directory)
+#   - ~/.config/tint/tint.yaml (in your home directory)
+#
+# Note: OS_PASSWORD must be set as an environment variable (not in this file)
+
+auth_url: "https://your.openstack.com/keystone/v3"
+username: "username@domain.com"
+domain_name: "default"
+
+project_id: "project-id"
+project_name: "project-name"
+
+region_name: "region-name"
+availability_zone: "availability-zone"
+
+image_name: "image-name"
+flavor_name: "flavor-name"
+
+network_name: "network-name"
+network_attachment_mode: "existing_network"
