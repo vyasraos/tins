@@ -86,16 +86,6 @@ jobs:
           sarif_file: 'trivy-results.sarif'
           wait-for-processing: true
 
-      - name: Run Trivy dependency scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'dep'
-          scan-ref: '.'
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          exit-code: '0'
-          cache: true
-
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
