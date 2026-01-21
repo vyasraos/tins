@@ -39,6 +39,15 @@ tasks:
       - test -f ./tins
     silent: false
 
+  custom-create:
+    desc: "Create a temporary instance with custom user-data"
+    cmds:
+      - ./tins create {{.CLI_ARGS}} --user-data testdata/user-data.sh
+    preconditions:
+      - test -f ./tins
+      - test -f testdata/user-data.sh
+    silent: false
+
   default:
     desc: "Show available tasks"
     cmds:

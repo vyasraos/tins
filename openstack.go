@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gophercloud/gophercloud/v2"
+	gophercloudv2 "github.com/gophercloud/gophercloud/v2"
 	"github.com/gophercloud/gophercloud/v2/openstack"
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/flavors"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/keypairs"
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
 	"github.com/gophercloud/gophercloud/v2/openstack/image/v2/images"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
@@ -15,16 +16,17 @@ import (
 
 // OpenStackClient wraps the OpenStack clients
 type OpenStackClient struct {
-	computeClient *gophercloud.ServiceClient
-	networkClient *gophercloud.ServiceClient
-	imageClient   *gophercloud.ServiceClient
+	computeClient *gophercloudv2.ServiceClient
+	networkClient *gophercloudv2.ServiceClient
+	imageClient   *gophercloudv2.ServiceClient
 	config        *OpenStackConfig
 }
 
+
 // NewOpenStackClient creates a new OpenStack client
 func NewOpenStackClient(ctx context.Context, config *OpenStackConfig) (*OpenStackClient, error) {
-	// Authenticate with OpenStack
-	opts := gophercloud.AuthOptions{
+	// Authenticate with OpenStack (v2)
+	opts := gophercloudv2.AuthOptions{
 		IdentityEndpoint: config.AuthURL,
 		Username:         config.Username,
 		Password:         config.Password,
@@ -37,8 +39,8 @@ func NewOpenStackClient(ctx context.Context, config *OpenStackConfig) (*OpenStac
 		return nil, fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	// Initialize Compute service client
-	computeClient, err := openstack.NewComputeV2(provider, gophercloud.EndpointOpts{
+	// Initialize Compute service client (v2) for servers, flavors, keypairs, etc.
+	computeClient, err := openstack.NewComputeV2(provider, gophercloudv2.EndpointOpts{
 		Region: config.RegionName,
 	})
 	if err != nil {
@@ -46,7 +48,7 @@ func NewOpenStackClient(ctx context.Context, config *OpenStackConfig) (*OpenStac
 	}
 
 	// Initialize Network service client
-	networkClient, err := openstack.NewNetworkV2(provider, gophercloud.EndpointOpts{
+	networkClient, err := openstack.NewNetworkV2(provider, gophercloudv2.EndpointOpts{
 		Region: config.RegionName,
 	})
 	if err != nil {
@@ -54,7 +56,7 @@ func NewOpenStackClient(ctx context.Context, config *OpenStackConfig) (*OpenStac
 	}
 
 	// Initialize Image service client (Glance)
-	imageClient, err := openstack.NewImageV2(provider, gophercloud.EndpointOpts{
+	imageClient, err := openstack.NewImageV2(provider, gophercloudv2.EndpointOpts{
 		Region: config.RegionName,
 	})
 	if err != nil {
@@ -138,8 +140,34 @@ func (c *OpenStackClient) FindNetworkByName(ctx context.Context, networkName str
 	return allNetworks[0].ID, nil
 }
 
+// CreateKeypair creates an OpenStack keypair by importing the locally generated public key
+// The keypair name matches the instance name
+func (c *OpenStackClient) CreateKeypair(ctx context.Context, keypairName string, publicKey string) error {
+	createOpts := keypairs.CreateOpts{
+		Name:      keypairName,
+		PublicKey: publicKey, // Import the locally generated public key
+	}
+
+	_, err := keypairs.Create(ctx, c.computeClient, createOpts).Extract()
+	if err != nil {
+		return fmt.Errorf("failed to create keypair: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteKeypair deletes an OpenStack keypair by name
+func (c *OpenStackClient) DeleteKeypair(ctx context.Context, keypairName string) error {
+	err := keypairs.Delete(ctx, c.computeClient, keypairName, keypairs.DeleteOpts{}).ExtractErr()
+	if err != nil {
+		return fmt.Errorf("failed to delete keypair: %w", err)
+	}
+
+	return nil
+}
+
 // CreateInstance creates a new temporary instance
-func (c *OpenStackClient) CreateInstance(ctx context.Context, instanceName string, publicKey string) (*servers.Server, error) {
+func (c *OpenStackClient) CreateInstance(ctx context.Context, instanceName string, publicKey string, userData []byte) (*servers.Server, error) {
 	// Find image ID
 	imageID, err := c.FindImageByName(ctx, c.config.ImageName)
 	if err != nil {
@@ -158,8 +186,15 @@ func (c *OpenStackClient) CreateInstance(ctx context.Context, instanceName strin
 		return nil, err
 	}
 
-	// Create server options
-	createOpts := servers.CreateOpts{
+	// Create OpenStack keypair for management purposes (not linked to instance)
+	if publicKey != "" {
+		if err := c.CreateKeypair(ctx, instanceName, publicKey); err != nil {
+			return nil, fmt.Errorf("failed to create keypair: %w", err)
+		}
+	}
+
+	// Create base server options
+	baseOpts := servers.CreateOpts{
 		Name:      instanceName,
 		ImageRef:  imageID,
 		FlavorRef: flavorID,
@@ -170,17 +205,23 @@ func (c *OpenStackClient) CreateInstance(ctx context.Context, instanceName strin
 		Metadata: map[string]string{
 			TempInstanceTag: "true",
 		},
-		UserData: []byte(fmt.Sprintf(`#!/bin/bash
-# Add public key to authorized_keys
-mkdir -p /root/.ssh
-echo "%s" >> /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
-chmod 700 /root/.ssh
-`, publicKey)),
+		UserData: userData,
+	}
+
+	// Use official keypairs.CreateOptsExt for KeyName support
+	var createOpts servers.CreateOptsBuilder
+	if publicKey != "" {
+		createOpts = keypairs.CreateOptsExt{
+			CreateOptsBuilder: baseOpts,
+			KeyName:           instanceName,
+		}
+	} else {
+		createOpts = baseOpts
 	}
 
 	// Note: Tags are added after instance creation via separate API call
 	// as some OpenStack versions don't support tags in CreateOpts
+
 
 	// Create the server
 	server, err := servers.Create(ctx, c.computeClient, createOpts, nil).Extract()

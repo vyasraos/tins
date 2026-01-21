@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -86,9 +87,11 @@ func generateInstanceName() (string, error) {
 var createCmd = &cobra.Command{
 	Use:   "create [instance-name]",
 	Short: "Create a new temporary instance",
-	Long:  "Create a new ephemeral OpenStack instance with automatic SSH key generation. If instance-name is not provided, a random Docker-style two-word name (adjective-noun) will be generated.",
+	Long:  "Create a new ephemeral OpenStack instance with automatic SSH key generation. If instance-name is not provided, a random Docker-style two-word name (adjective-noun) will be generated. Optionally provide a user-data file for custom instance provisioning.",
 	Args:  cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get user_data file path from flag
+		userDataFile, _ := cmd.Flags().GetString("user-data")
 		var instanceName string
 		var err error
 
@@ -126,9 +129,20 @@ var createCmd = &cobra.Command{
 		}
 		fmt.Printf("SSH key pair created: %s\n", keyPair.PrivateKeyPath)
 
+		// Read user_data file if provided
+		var userData []byte
+		if userDataFile != "" {
+			data, err := os.ReadFile(userDataFile)
+			if err != nil {
+				return fmt.Errorf("failed to read user-data file: %w", err)
+			}
+			userData = data
+			fmt.Printf("Loaded user-data from: %s\n", userDataFile)
+		}
+
 		// Create instance
 		fmt.Printf("Creating instance %s...\n", fullInstanceName)
-		server, err := client.CreateInstance(ctx, fullInstanceName, keyPair.PublicKey)
+		server, err := client.CreateInstance(ctx, fullInstanceName, keyPair.PublicKey, userData)
 		if err != nil {
 			// Clean up SSH keys on failure
 			if deleteErr := DeleteSSHKey(instanceName); deleteErr != nil {
@@ -190,9 +204,9 @@ var createCmd = &cobra.Command{
 
 		fmt.Printf("\nSSH connection:\n")
 		if instanceIP != "" {
-			fmt.Printf("  ssh -i %s root@%s\n", keyPair.PrivateKeyPath, instanceIP)
+			fmt.Printf("  ssh -i %s ubuntu@%s\n", keyPair.PrivateKeyPath, instanceIP)
 		} else {
-			fmt.Printf("  ssh -i %s root@<instance-ip>\n", keyPair.PrivateKeyPath)
+			fmt.Printf("  ssh -i %s ubuntu@<instance-ip>\n", keyPair.PrivateKeyPath)
 		}
 
 		return nil
@@ -200,5 +214,6 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
+	createCmd.Flags().String("user-data", "", "Path to user-data file for custom instance provisioning (optional)")
 	rootCmd.AddCommand(createCmd)
 }

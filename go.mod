@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.4
 
 require (
-	github.com/gophercloud/gophercloud/v2 v2.0.0
+	github.com/gophercloud/gophercloud/v2 v2.10.0
 	github.com/nsf/termbox-go v1.1.1
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.42.0
